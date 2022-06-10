@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analyze</title>
+  <style type="text/css">
+    *{
+      outline: none;
+    }
+    input[type="file"] + label{
+      /*background-color: #c8dadf;*/
+      cursor: pointer;
+      padding: 90px 110px;
+      display: inline-block;
+      outline: 2px dashed #c5c5c5;
+      color: #c5c5c5;
+      user-select: none;
+      /*outline-offset: -10px;*/
+      margin: 10px;
+      border-radius: 5px;
+      font-size: 24px;
+      border-radius: 16px;
+    }
+    #table{
+      border-spacing: 0px;
+    }
+    #table th{
+      font-size: small;
+      padding: 0 2px;
+    }
+    #table td{
+      /*user-select: text!important;*/
+      text-align: right;
+      padding: 0 2px;
+      /*max-width: 60px;*/
+      overflow: scroll;
+    }
+    #table td::-webkit-scrollbar{ display: none; }
+    #table td:nth-child(1){
+      user-select: none;
+      cursor: pointer;
+    }
+    #table td:nth-child(3 ), th:nth-child(3 ) { background: #b7dee8; }
+    #table td:nth-child(4 ), th:nth-child(4 ) { background: #b7dee8; }
+    #table td:nth-child(5 ), th:nth-child(5 ) { background: #b7dee8; }
+    #table td:nth-child(6 ), th:nth-child(6 ) { background: #fcd5b4; }
+    #table td:nth-child(7 ), th:nth-child(7 ) { background: #fcd5b4; }
+    #table td:nth-child(8 ), th:nth-child(8 ) { background: #fcd5b4; }
+    #table td:nth-child(9 ), th:nth-child(9 ) { background: #e4dfec; }
+    #table td:nth-child(10), th:nth-child(10) { background: #e4dfec; }
+    #table td:nth-child(11), th:nth-child(11) { background: #e4dfec; }
+    #table td:nth-child(12), th:nth-child(12) { background: #d8e4bc; }
+    #table td:nth-child(13), th:nth-child(13) { background: #d8e4bc; }
+    #table td:nth-child(14), th:nth-child(14) { background: #d8e4bc; }
+    input[type="text"]{
+      border: 0;
+      border-bottom: 2px solid #000;
+      padding: 8px 4px;
+      vertical-align: middle;
+      text-decoration: none;
+    }
+    input[type="text"]:focus{
+      border-bottom: 2px solid rgb(109 171 252);
+    }
+    #copy-btn, #index{
+      margin: 16px 32px;
+    }
+    button{
+      border: 2px solid rgb(118 196 136);
+      border-radius: 8px;
+      user-select: none;
+      display: inline-block;
+      padding: 8px 16px;
+      vertical-align: middle;
+      overflow: hidden;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      white-space: nowrap;
+      background-color: white;
+      margin: 0 5px;
+    }
+    button:hover{
+      background-color: #eee;
+    }
+    small{
+      font-size: small;
+    }
+  </style>
+</head>
+<body>
+  <center>
+    <div>
+      <input type="file" id="upload" hidden multiple />
+      <label for="upload">檔案上傳（.dat）<br><small>已上傳 <span id="buffer">0</span> 個檔案</small></label>
+    </div>
+    <div>
+      <input type="text" id="index" placeholder="編號"><button id="copy-btn">複製表格</button>
+    </div>
+    <table id="table">
+      <tr>
+        <th></th>
+        <th>編號</th>
+        <th>EP_RT</th>
+        <th>EP_Acc</th>
+        <th>EP_SD</th>
+        <th>EM_RT</th>
+        <th>EM_Acc</th>
+        <th>EM_SD</th>
+        <th>ENS_RT</th>
+        <th>ENS_Acc</th>
+        <th>ENS_SD</th>
+        <th>ES_RT</th>
+        <th>ES_Acc</th>
+        <th>ES_SD</th>
+      </tr>
+    </table>
+  </center>
+  <script type="text/javascript">
+    let output = [];
+    let buffer = [];
+    const escapeHtml = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    function Assert(x){
+      if(x) return;
+      const here = (new Error().stack);
+      if(window.location.protocol == 'file:'){
+        console.error(here);
+      }else{
+        window.alert(`發生非預期的錯誤，或許可以截圖回報給開發者\n${here}`);
+      }
+    }
+    function sum(x){ return x.reduce((a, b) => a + b, 0); }
+    function average(x){ return x.length > 0 ? sum(x) / x.length : 0; }
+    function std(x){
+      if(x.length <= 1) return 0;
+      const avg = average(x);
+      return Math.sqrt(sum(x.map(e => (e - avg) * (e - avg))) / (x.length - 1));
+    }
+    const type = {
+      "Trial": Number,
+      "R": Number,
+      "Type": String,
+      "Correct": Number,
+      "Latency": Number,
+      "Stim/R": String
+    };
+    const groups = [
+      '11 12 21 22',
+      '111 112 121 122 211 212 221 222',
+      '111 112 121 122',
+      '211 212 221 222'
+    ].map(e => e.split(' '));
+    function to_list(data){
+      try{
+        const lines = data.trim().split('\n');
+        const split_idx = lines.map(e => e.search('=') != -1).reduce((acc, cur, i) => {
+          if(acc != -1) return acc;
+          return cur ? -1 : i;
+        }, -1);
+        Assert(lines.length >= 2 + split_idx);
+        let titles = lines[split_idx];
+        let separator = lines[split_idx + 1];
+        let values = lines.slice(split_idx + 2);
+        Assert(separator.match(/ /g).length + separator.match(/-/g).length == separator.length);
+        const slicer = (Array.from(separator.matchAll(/-+/g)).map(e => [e.index, e.index + e[0].length]));
+        titles = slicer.map(([l, r]) => titles.slice(l, r).trim());
+        data = values.map(e => {
+          e = e.trim().split(/\s+/g);
+          return titles.reduce((acc, t, i) => ({
+            ...acc, [t]: (type[t] || String)(e[i])
+          }), {});
+        });
+        return data.filter(e => e.Correct != 0);
+      }catch(e){
+        Assert(false);
+      }
+    }
+    function delRow(ele){
+      const idx = ele.nextElementSibling.innerText;
+      // console.log(idx);
+      const nodes = Array.from(table.children).slice(1).filter(e => e.firstElementChild.nextElementSibling.innerText == idx);
+      Assert(nodes.length == 1 && output.filter(e => e.index == idx).length == 1);
+      output = output.filter(e => e.index != idx);
+      table.removeChild(nodes[0]);
+    }
+    const table = document.getElementById('table');
+    function append(row){
+      // console.log(row);
+      const ele = document.createElement('tr');
+      ele.innerHTML = `
+        <td onclick="delRow(this)">❌</td>
+        <td>${escapeHtml(row.index)}</td>
+        <td>${row[0].average.toPrecision(3)}</td>
+        <td>${row[0].accuracy.toPrecision(3)}</td>
+        <td>${row[0].stdev.toPrecision(3)}</td>
+        <td>${row[1].average.toPrecision(3)}</td>
+        <td>${row[1].accuracy.toPrecision(3)}</td>
+        <td>${row[1].stdev.toPrecision(3)}</td>
+        <td>${row[2].average.toPrecision(3)}</td>
+        <td>${row[2].accuracy.toPrecision(3)}</td>
+        <td>${row[2].stdev.toPrecision(3)}</td>
+        <td>${row[3].average.toPrecision(3)}</td>
+        <td>${row[3].accuracy.toPrecision(3)}</td>
+        <td>${row[3].stdev.toPrecision(3)}</td>
+      `;
+      table.appendChild(ele);
+      output.push(row);
+    }
+    function evaluate(contents, idx){
+      const data = contents.reduce((a, c) => a.concat(to_list(c)), []);
+      const result = groups.map(g => {
+        const ok = data.filter(({ Type }) => g.includes(Type));
+        return {
+          average: average(ok.map(e => e.Latency)),
+          stdev: std(ok.map(e => e.Latency)),
+          accuracy: average(ok.map(e => e.Correct > 0 ? 1 : 0))
+        };
+      });
+      result.index = idx;
+      // console.log(result);
+      append(result);
+      return true;
+    }
+    // evaluate([]);
+    const bufferElement = document.getElementById('buffer');
+    function updateBuffer(news=false){
+      if(news === false) buffer = [];
+      else buffer = buffer.concat(news);
+      bufferElement.innerText = buffer.length;
+    }
+    const index = document.getElementById('index');
+    index.addEventListener('keydown', evt => {
+      if(evt.key === 'Enter'){
+        const idx = index.value;
+        if(!idx) return window.alert('編號不可為空');
+        if(output.map(e => e.index).includes(idx)) return window.alert('編號不可重複');
+        if(!buffer.length) return window.alert('資料不可為空');
+        if(evaluate(buffer, idx) === true){
+          updateBuffer();
+        }else{
+          Assert(false);
+        }
+      }
+    });
+    document.querySelectorAll("input[type=file] + label").forEach(elt => {
+      elt.addEventListener("drop", async event => {
+        try{
+          event.preventDefault();
+          var files = [];
+          // console.log(event.dataTransfer.items[0]);
+          if(event.dataTransfer.items){
+            for(var i = 0; i < event.dataTransfer.items.length; i++)
+              if(event.dataTransfer.items[i].kind === "file")
+                files.push(event.dataTransfer.items[i].getAsFile());
+          }else files = event.dataTransfer.files;
+          files = files.filter(f => f.name.split(".").slice(-1)[0] === "dat");
+          files = await Promise.all(files.map(e => e.text()));
+          files = files.map(e => e.replace(/\r/g, ''));
+          // evaluate(files, index.value);
+          updateBuffer(files);
+          index.focus();
+        }catch(e){
+          Assert(false);
+        }
+      });
+      elt.addEventListener("dragover", e => e.preventDefault());
+    });
+    function copy(){
+      // var range = document.createRange();
+      // range.selectNode(table);
+      // window.getSelection().addRange(range);
+      // document.execCommand('copy');
+      // window.getSelection().removeAllRanges();
+      const txt = output.map(row => [
+        row.index, 
+        row[0].average, row[0].accuracy, row[0].stdev,
+        row[1].average, row[1].accuracy, row[1].stdev,
+        row[2].average, row[2].accuracy, row[2].stdev,
+        row[3].average, row[3].accuracy, row[3].stdev
+      ].join('\t')).join('\n');
+      navigator.clipboard.writeText(txt).catch(() => Assert(false));
+    }
+    document.getElementById('copy-btn').addEventListener('click', copy);
+  </script>
+</body>
+</html>
