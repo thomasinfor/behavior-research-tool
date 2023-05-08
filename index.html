@@ -221,7 +221,7 @@
     function evaluate(contents, idx){
       const data = contents.reduce((a, c) => a.concat(to_list(c)), []);
       const result = groups.map(g => {
-        const ok = data.filter(({ Type }) => g.includes(Type));
+        const ok = data.filter(({ Type }) => g.includes(Type.replace(/3/g, 1).replace(/4/g, 2)));
         return {
           average: average(ok.map(e => e.Latency)),
           stdev: std(ok.map(e => e.Latency)),
