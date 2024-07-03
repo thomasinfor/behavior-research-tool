@@ -223,8 +223,8 @@
       const result = groups.map(g => {
         const ok = data.filter(({ Type }) => g.includes(Type.replace(/3/g, 1).replace(/4/g, 2)));
         return {
-          average: average(ok.map(e => e.Latency)),
-          stdev: std(ok.map(e => e.Latency)),
+          average: average(ok.filter(e => e.Correct > 0).map(e => e.Latency)),
+          stdev: std(ok.filter(e => e.Correct > 0).map(e => e.Latency)),
           accuracy: average(ok.map(e => e.Correct > 0 ? 1 : 0))
         };
       });
