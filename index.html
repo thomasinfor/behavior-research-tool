@@ -182,7 +182,7 @@
             ...acc, [t]: (type[t] || String)(e[i])
           }), {});
         });
-        return data.filter(e => e.Correct != 0);
+        return data;
       }catch(e){
         Assert(false);
       }
@@ -221,7 +221,8 @@
     function evaluate(contents, idx){
       const data = contents.reduce((a, c) => a.concat(to_list(c)), []);
       const result = groups.map(g => {
-        const ok = data.filter(({ Type }) => g.includes(Type.replace(/3/g, 1).replace(/4/g, 2)));
+        const ok = data.filter(({ Type, "Stim/Resp": sr }) =>
+          sr == "Stim" && g.includes(Type.replace(/3/g, 1).replace(/4/g, 2)));
         return {
           average: average(ok.filter(e => e.Correct > 0).map(e => e.Latency)),
           stdev: std(ok.filter(e => e.Correct > 0).map(e => e.Latency)),
